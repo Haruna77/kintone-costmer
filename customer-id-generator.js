@@ -20,7 +20,7 @@
   const ID_PREFIX = 'C-';
 
   // ★要設定: IDの桁数（ゼロ埋め）
-  const PADDING_LENGTH = 5;
+  const PADDING_LENGTH = 7;
   // ===================================================================================
 
   kintone.events.on('app.record.create.submit.success', async (event) => {
