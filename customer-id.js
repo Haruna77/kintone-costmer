@@ -65,3 +65,81 @@
 
 })();
 
+
+/**
+ * @name Purchaser Info Automation
+ * @description
+ * This script is for the "Purchaser Information" app (購入者情報).
+ * It checks the purchase history table for a specific keyword ("バックエンド").
+ * If the keyword is found, it populates a specified text field with "ONE生徒".
+ *
+ * @trigger on record create/edit screen, record detail screen, and when the table is modified.
+ */
+(function() {
+  'use strict';
+
+  // ===================================================================================
+  // 設定箇所 (User Configuration)
+  // ===================================================================================
+  // ★要設定: 購入履歴が入力されているテーブルのフィールドコード
+  const TABLE_FIELD_CODE = 'テーブル_決済管理表の情報_購入履歴';
+
+  // ★要設定: テーブル内にある「商品種別」のフィールドコード
+  const PRODUCT_TYPE_IN_TABLE = '文字列__1行_商品種別';
+
+  // ★要設定: 分類結果を表示するテーブル外のフィールドコード（文字列1行）
+  const TARGET_FIELD_CODE = '自動入力_ONE入会有無';
+
+  // ★要設定: 検索したいキーワード
+  const KEYWORD = 'バックエンド';
+
+  // ★要設定: キーワードが見つかった場合に設定するテキスト
+  const TEXT_TO_SET = 'ONE生徒';
+  // ===================================================================================
+
+  // スクリプトを実行するイベントを指定
+  const events = [
+    `app.record.create.change.${TABLE_FIELD_CODE}`,
+    `app.record.edit.change.${TABLE_FIELD_CODE}`,
+    'app.record.create.show',
+    'app.record.edit.show',
+    'app.record.detail.show'
+  ];
+
+  const checkTableAndSetField = (event) => {
+    const record = event.record;
+
+    // ターゲットフィールドが存在しない場合は処理を中断
+    if (!record[TARGET_FIELD_CODE]) {
+      return event;
+    }
+    
+    const table = record[TABLE_FIELD_CODE].value;
+    let isFound = false;
+
+    // テーブルの各行をループしてキーワードを探す
+    for (const row of table) {
+      if (row.value[PRODUCT_TYPE_IN_TABLE] && row.value[PRODUCT_TYPE_IN_TABLE].value) {
+        const productType = row.value[PRODUCT_TYPE_IN_TABLE].value;
+        
+        if (productType.includes(KEYWORD)) {
+          isFound = true;
+          break; // 一つでも見つかればループを抜ける
+        }
+      }
+    }
+
+    // 見つかったかどうかに応じて、ターゲットフィールドの値を設定
+    if (isFound) {
+      record[TARGET_FIELD_CODE].value = TEXT_TO_SET;
+    } else {
+      // 見つからなかった場合、フィールドを空にする
+      record[TARGET_FIELD_CODE].value = '';
+    }
+
+    return event;
+  };
+
+  kintone.events.on(events, checkTableAndSetField);
+
+})();
