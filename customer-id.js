@@ -4,6 +4,8 @@
  * This script is for the "Purchaser Information" app.
  * 1. Generates a unique customer ID when a new record is created manually.
  * 2. Automatically sets the "ONE生徒" field based on the purchase history table content.
+ * 3. Automatically sets the "集客者" field based on a priority of source fields.
+ * 4. Automatically sets the "集客媒体" field based on a priority of source fields.
  */
 (function() {
   'use strict';
@@ -67,11 +69,8 @@
       'app.record.create.show',
       'app.record.edit.show',
       'app.record.detail.show',
-      // ▼▼▼【変更点】▼▼▼
-      // レコード保存直前のイベントを追加し、初回のレコード登録時にも確実に実行されるようにします。
       'app.record.create.submit',
       'app.record.edit.submit'
-      // ▲▲▲【変更ここまで】▲▲▲
     ];
 
     const checkTableAndSetField = (event) => {
@@ -96,6 +95,73 @@
     };
 
     kintone.events.on(events, checkTableAndSetField);
+  })();
+
+  // --- 機能3: 集客者の自動入力 ------------------------------------------
+  /**
+   * @name Referrer Auto Setter
+   * @description Sets the referrer field based on a priority of other fields.
+   */
+  (function() {
+    // --- 設定箇所 ---
+    const TARGET_FIELD = '自動入力_集客者';
+    const PRIORITY_FIELDS = [
+      '集客者_ルックアップ',
+      'ルックアップ_登録経路_自社広告・自社SNS',
+      '文字列__1行_登録経路_手入力用'
+    ];
+    // --- 設定ここまで ---
+
+    const sourceFieldChangeEvents = PRIORITY_FIELDS.map(fc => `app.record.create.change.${fc}`).concat(PRIORITY_FIELDS.map(fc => `app.record.edit.change.${fc}`));
+    const events = ['app.record.create.show', 'app.record.edit.show', 'app.record.detail.show', 'app.record.create.submit', 'app.record.edit.submit'].concat(sourceFieldChangeEvents);
+
+    const setReferrerField = (event) => {
+      const record = event.record;
+      if (!record[TARGET_FIELD]) return event;
+      let foundValue = '';
+      for (const fieldCode of PRIORITY_FIELDS) {
+        if (record[fieldCode] && record[fieldCode].value) {
+          foundValue = record[fieldCode].value;
+          break;
+        }
+      }
+      record[TARGET_FIELD].value = foundValue;
+      return event;
+    };
+    kintone.events.on(events, setReferrerField);
+  })();
+
+  // --- 機能4: 集客媒体の自動入力 ------------------------------------------
+  /**
+   * @name Media Auto Setter
+   * @description Sets the media field based on a priority of other fields.
+   */
+  (function() {
+    // --- 設定箇所 ---
+    const TARGET_FIELD = '自動入力_集客媒体';
+    const PRIORITY_FIELDS = [
+      '報酬ランク_集客',
+      'ルックアップ_集客媒体_集客者の報酬ランク'
+    ];
+    // --- 設定ここまで ---
+
+    const sourceFieldChangeEvents = PRIORITY_FIELDS.map(fc => `app.record.create.change.${fc}`).concat(PRIORITY_FIELDS.map(fc => `app.record.edit.change.${fc}`));
+    const events = ['app.record.create.show', 'app.record.edit.show', 'app.record.detail.show', 'app.record.create.submit', 'app.record.edit.submit'].concat(sourceFieldChangeEvents);
+
+    const setMediaField = (event) => {
+      const record = event.record;
+      if (!record[TARGET_FIELD]) return event;
+      let foundValue = '';
+      for (const fieldCode of PRIORITY_FIELDS) {
+        if (record[fieldCode] && record[fieldCode].value) {
+          foundValue = record[fieldCode].value;
+          break;
+        }
+      }
+      record[TARGET_FIELD].value = foundValue;
+      return event;
+    };
+    kintone.events.on(events, setMediaField);
   })();
 
 })();
