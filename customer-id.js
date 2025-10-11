@@ -1,67 +1,102 @@
 /**
- * @name Customer ID Generator
+ * @name Customer ID Generator & Info Automation
  * @description
  * This script is for the "Purchaser Information" app.
- * When a new record is successfully created, it takes the record number,
- * formats it with a prefix and zero-padding, and updates the "purchaser_id" field.
- *
- * @trigger app.record.create.submit.success on the "Purchaser Information" app.
+ * 1. Generates a unique customer ID when a new record is created manually.
+ * 2. Automatically sets the "ONE生徒" field based on the purchase history table content.
  */
 (function() {
   'use strict';
 
-  // ===================================================================================
-  // 設定箇所 (User Configuration)
-  // ===================================================================================
-  // ★要設定: 顧客IDを保存するフィールドのフィールドコード
-  const CUSTOMER_ID_FIELD = 'purchaser_id';
+  // --- 機能1: 顧客IDの自動生成 ------------------------------------------
+  /**
+   * @name Customer ID Generator
+   * @trigger app.record.create.submit.success
+   */
+  (function() {
+    // --- 設定箇所 ---
+    const CUSTOMER_ID_FIELD = 'purchaser_id';
+    const ID_PREFIX = 'C-';
+    const PADDING_LENGTH = 7;
+    // --- 設定ここまで ---
 
-  // ★要設定: 顧客IDの接頭辞（プレフィックス）
-  const ID_PREFIX = 'C-';
+    kintone.events.on('app.record.create.submit.success', async (event) => {
+      console.log('機能1: Customer ID Generator triggered.');
+      const record = event.record;
+      const recordId = event.recordId;
 
-  // ★要設定: IDの桁数（ゼロ埋め）
-  const PADDING_LENGTH = 7;
-  // ===================================================================================
-
-  kintone.events.on('app.record.create.submit.success', async (event) => {
-    console.log('Customer ID Generator triggered.');
-    const record = event.record;
-    const recordId = event.recordId;
-
-    // 既に顧客IDが何らかの理由で入力されている場合は、処理を中断
-    if (record[CUSTOMER_ID_FIELD].value) {
-      console.log('Customer ID already exists. Skipping generation.');
+      if (record[CUSTOMER_ID_FIELD].value) {
+        console.log('機能1: Customer ID already exists. Skipping generation.');
+        return event;
+      }
+      try {
+        const newId = ID_PREFIX + String(recordId).padStart(PADDING_LENGTH, '0');
+        const params = {
+          app: kintone.app.getId(),
+          id: recordId,
+          record: {
+            [CUSTOMER_ID_FIELD]: { value: newId }
+          }
+        };
+        await kintone.api(kintone.api.url('/k/v1/record', true), 'PUT', params);
+        console.log('機能1: Successfully updated the record with the new Customer ID.');
+      } catch (error) {
+        console.error('機能1: Failed to update record with Customer ID.', error);
+      }
       return event;
-    }
+    });
+  })();
 
-    try {
-      // レコード番号を元に、新しい顧客IDを生成
-      const newId = ID_PREFIX + String(recordId).padStart(PADDING_LENGTH, '0');
-      console.log(`Generated new ID: ${newId} for Record ID: ${recordId}`);
+  // --- 機能2: ONE生徒の自動入力 ----------------------------------------
+  /**
+   * @name Purchaser Info Automation
+   * @trigger on record create/edit screen, record detail screen, and when the table is modified.
+   */
+  (function() {
+    // --- 設定箇所 ---
+    const TABLE_FIELD_CODE = 'テーブル_決済管理表の情報_購入履歴';
+    const PRODUCT_TYPE_IN_TABLE = '文字列__1行_商品種別';
+    const TARGET_FIELD_CODE = '自動入力_ONE入会有無';
+    const KEYWORD = 'バックエンド';
+    const TEXT_TO_SET = 'ONE生徒';
+    // --- 設定ここまで ---
 
-      // このレコード自身の顧客IDフィールドを更新するためのAPIリクエストを作成
-      const params = {
-        app: kintone.app.getId(),
-        id: recordId,
-        record: {
-          [CUSTOMER_ID_FIELD]: {
-            value: newId
+    const events = [
+      `app.record.create.change.${TABLE_FIELD_CODE}`,
+      `app.record.edit.change.${TABLE_FIELD_CODE}`,
+      'app.record.create.show',
+      'app.record.edit.show',
+      'app.record.detail.show',
+      // ▼▼▼【変更点】▼▼▼
+      // レコード保存直前のイベントを追加し、初回のレコード登録時にも確実に実行されるようにします。
+      'app.record.create.submit',
+      'app.record.edit.submit'
+      // ▲▲▲【変更ここまで】▲▲▲
+    ];
+
+    const checkTableAndSetField = (event) => {
+      const record = event.record;
+      if (!record[TARGET_FIELD_CODE]) return event;
+
+      const table = record[TABLE_FIELD_CODE].value;
+      let isFound = false;
+
+      for (const row of table) {
+        if (row.value[PRODUCT_TYPE_IN_TABLE] && row.value[PRODUCT_TYPE_IN_TABLE].value) {
+          const productType = row.value[PRODUCT_TYPE_IN_TABLE].value;
+          if (productType.includes(KEYWORD)) {
+            isFound = true;
+            break;
           }
         }
-      };
+      }
 
-      // レコードを更新
-      await kintone.api(kintone.api.url('/k/v1/record', true), 'PUT', params);
-      console.log('Successfully updated the record with the new Customer ID.');
+      record[TARGET_FIELD_CODE].value = isFound ? TEXT_TO_SET : '';
+      return event;
+    };
 
-    } catch (error) {
-      console.error('Failed to update record with Customer ID.', error);
-      // ここでエラーを出してしまうと画面にエラーが表示されてしまうため、ログ出力に留める
-      // ユーザーは画面をリロードすれば生成されたIDを確認できる
-    }
-
-    return event;
-  });
+    kintone.events.on(events, checkTableAndSetField);
+  })();
 
 })();
 
