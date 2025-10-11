@@ -4,6 +4,7 @@
  * This script is for the "Purchaser Information" app.
  * 1. Generates a unique customer ID when a new record is created manually.
  * 2. Automatically sets the "ONE生徒" field based on the purchase history table content.
+ * 3. Automatically sets the "集客者" field based on a priority of source fields.
  */
 (function() {
   'use strict';
@@ -67,11 +68,8 @@
       'app.record.create.show',
       'app.record.edit.show',
       'app.record.detail.show',
-      // ▼▼▼【変更点】▼▼▼
-      // レコード保存直前のイベントを追加し、初回のレコード登録時にも確実に実行されるようにします。
       'app.record.create.submit',
       'app.record.edit.submit'
-      // ▲▲▲【変更ここまで】▲▲▲
     ];
 
     const checkTableAndSetField = (event) => {
@@ -96,6 +94,61 @@
     };
 
     kintone.events.on(events, checkTableAndSetField);
+  })();
+
+  // --- 機能3: 集客者の自動入力 ------------------------------------------
+  /**
+   * @name Referrer Auto Setter
+   * @description Sets the referrer field based on a priority of other fields.
+   */
+  (function() {
+    // --- 設定箇所 ---
+    // ターゲットフィールド（ここに自動入力する）
+    const TARGET_FIELD = '自動入力_集客者';
+
+    // 優先順位リスト（上から順にチェックされる）
+    const PRIORITY_FIELDS = [
+      '集客者_ルックアップ',
+      'ルックアップ_登録経路_自社広告・自社SNS',
+      '文字列__1行_登録経路_手入力用'
+    ];
+    // --- 設定ここまで ---
+
+    // 参照元フィールドが変更されたときにも動くようにイベントを動的に作成
+    const sourceFieldChangeEvents = PRIORITY_FIELDS.map(fieldCode => {
+      return `app.record.create.change.${fieldCode}`;
+    }).concat(PRIORITY_FIELDS.map(fieldCode => {
+      return `app.record.edit.change.${fieldCode}`;
+    }));
+
+    const events = [
+      'app.record.create.show',
+      'app.record.edit.show',
+      'app.record.detail.show',
+      'app.record.create.submit',
+      'app.record.edit.submit'
+    ].concat(sourceFieldChangeEvents);
+
+    const setReferrerField = (event) => {
+      const record = event.record;
+      if (!record[TARGET_FIELD]) return event;
+
+      let foundValue = '';
+
+      // 優先順位リストを順番にチェック
+      for (const fieldCode of PRIORITY_FIELDS) {
+        // フィールドが存在し、値が空でないかを確認
+        if (record[fieldCode] && record[fieldCode].value) {
+          foundValue = record[fieldCode].value;
+          break; // 値が見つかったらループを抜ける
+        }
+      }
+
+      record[TARGET_FIELD].value = foundValue;
+      return event;
+    };
+
+    kintone.events.on(events, setReferrerField);
   })();
 
 })();
